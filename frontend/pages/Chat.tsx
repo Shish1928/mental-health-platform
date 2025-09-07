@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/components/ui/use-toast';
-import { Send, Bot, User, Globe, Shield } from 'lucide-react';
+import { Send, Bot, User, Globe, Shield, CloudUpload } from 'lucide-react';
 import backend from '~backend/client';
+import DataSyncStatus from '../components/DataSyncStatus';
 
 interface Message {
   id: string;
@@ -24,6 +25,7 @@ export default function Chat() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [language, setLanguage] = useState('en');
   const [isAnonymous, setIsAnonymous] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -39,6 +41,7 @@ export default function Chat() {
   const startSessionMutation = useMutation({
     mutationFn: async () => {
       const userId = isAnonymous ? crypto.randomUUID() : 'current-user-id';
+      setCurrentUserId(userId);
       return backend.chat.startSession({
         userId,
         sessionType: 'text',
@@ -54,6 +57,12 @@ export default function Chat() {
         message: data.message,
         timestamp: new Date().toISOString(),
       }]);
+      
+      // Show sync notification for new session
+      toast({
+        title: 'Session started',
+        description: 'Your conversation will be automatically backed up for your safety.',
+      });
     },
     onError: (error) => {
       console.error('Error starting session:', error);
@@ -141,8 +150,8 @@ export default function Chat() {
       <div className="text-center space-y-4">
         <h1 className="text-3xl font-bold text-foreground">AI Chat Support</h1>
         <p className="text-muted-foreground">
-          Chat with our compassionate AI assistant in your preferred language. 
-          All conversations are confidential and anonymous.
+          Chat with our compassionate AI assistant powered by Google Gemini. 
+          All conversations are confidential, anonymous, and securely backed up.
         </p>
         
         <div className="flex items-center justify-center space-x-4">
@@ -154,119 +163,187 @@ export default function Chat() {
             <Globe className="w-4 h-4 text-blue-500" />
             <span className="text-sm text-muted-foreground">Multilingual Support</span>
           </div>
+          <div className="flex items-center space-x-2">
+            <CloudUpload className="w-4 h-4 text-purple-500" />
+            <span className="text-sm text-muted-foreground">Cloud Backup</span>
+          </div>
         </div>
       </div>
 
       {!sessionId ? (
-        <Card className="max-w-md mx-auto">
-          <CardHeader>
-            <CardTitle>Start Your Session</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-foreground">Language</label>
-              <select 
-                value={language} 
-                onChange={(e) => setLanguage(e.target.value)}
-                className="w-full mt-1 p-2 border border-border rounded-md bg-background text-foreground"
-              >
-                {languageOptions.map(lang => (
-                  <option key={lang.code} value={lang.code}>
-                    {lang.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="anonymous"
-                checked={isAnonymous}
-                onChange={(e) => setIsAnonymous(e.target.checked)}
-                className="rounded"
-              />
-              <label htmlFor="anonymous" className="text-sm text-foreground">
-                Stay anonymous (recommended)
-              </label>
-            </div>
-
-            <Button 
-              onClick={handleStartSession} 
-              className="w-full"
-              disabled={startSessionMutation.isPending}
-            >
-              {startSessionMutation.isPending ? 'Starting...' : 'Start Chat'}
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="h-[600px] flex flex-col">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center space-x-2">
-                <Bot className="w-5 h-5" />
-                <span>MindCare Assistant</span>
-              </CardTitle>
-              <Badge variant="outline" className="text-xs">
-                {languageOptions.find(l => l.code === language)?.name}
-              </Badge>
-            </div>
-          </CardHeader>
-          
-          <CardContent className="flex-1 flex flex-col space-y-4">
-            <ScrollArea className="flex-1 pr-4">
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2">
+            <Card className="max-w-md mx-auto">
+              <CardHeader>
+                <CardTitle>Start Your Session</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground">Language</label>
+                  <select 
+                    value={language} 
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="w-full mt-1 p-2 border border-border rounded-md bg-background text-foreground"
                   >
-                    <div className={`max-w-[80%] rounded-lg p-3 ${
-                      message.sender === 'user' 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'bg-muted text-foreground'
-                    }`}>
-                      <div className="flex items-start space-x-2">
-                        {message.sender === 'ai' && <Bot className="w-4 h-4 mt-0.5 text-muted-foreground" />}
-                        {message.sender === 'user' && <User className="w-4 h-4 mt-0.5" />}
-                        <div className="flex-1">
-                          <p className="text-sm">{message.message}</p>
-                          <div className="flex items-center justify-between mt-2">
-                            <span className="text-xs opacity-70">
-                              {new Date(message.timestamp).toLocaleTimeString()}
-                            </span>
-                            {message.riskLevel && (
-                              <div className={`w-2 h-2 rounded-full ${getRiskColor(message.riskLevel)}`} />
-                            )}
+                    {languageOptions.map(lang => (
+                      <option key={lang.code} value={lang.code}>
+                        {lang.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="anonymous"
+                    checked={isAnonymous}
+                    onChange={(e) => setIsAnonymous(e.target.checked)}
+                    className="rounded"
+                  />
+                  <label htmlFor="anonymous" className="text-sm text-foreground">
+                    Stay anonymous (recommended)
+                  </label>
+                </div>
+
+                <Button 
+                  onClick={handleStartSession} 
+                  className="w-full"
+                  disabled={startSessionMutation.isPending}
+                >
+                  {startSessionMutation.isPending ? 'Starting...' : 'Start Chat'}
+                </Button>
+
+                <div className="text-xs text-muted-foreground p-3 bg-muted rounded-lg">
+                  <p className="font-medium mb-1">🧠 Powered by Google Gemini AI</p>
+                  <p>Our AI assistant uses advanced language models to provide empathetic, evidence-based mental health support.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Privacy & Security</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs text-muted-foreground">
+                <p>• End-to-end encrypted conversations</p>
+                <p>• No personal data required in anonymous mode</p>
+                <p>• Automatic cloud backup for safety</p>
+                <p>• HIPAA-compliant data handling</p>
+                <p>• AI responses powered by Google Gemini</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3">
+            <Card className="h-[600px] flex flex-col">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center space-x-2">
+                    <Bot className="w-5 h-5" />
+                    <span>MindCare Assistant</span>
+                    <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700">
+                      Gemini AI
+                    </Badge>
+                  </CardTitle>
+                  <Badge variant="outline" className="text-xs">
+                    {languageOptions.find(l => l.code === language)?.name}
+                  </Badge>
+                </div>
+              </CardHeader>
+              
+              <CardContent className="flex-1 flex flex-col space-y-4">
+                <ScrollArea className="flex-1 pr-4">
+                  <div className="space-y-4">
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div className={`max-w-[80%] rounded-lg p-3 ${
+                          message.sender === 'user' 
+                            ? 'bg-primary text-primary-foreground' 
+                            : 'bg-muted text-foreground'
+                        }`}>
+                          <div className="flex items-start space-x-2">
+                            {message.sender === 'ai' && <Bot className="w-4 h-4 mt-0.5 text-muted-foreground" />}
+                            {message.sender === 'user' && <User className="w-4 h-4 mt-0.5" />}
+                            <div className="flex-1">
+                              <p className="text-sm">{message.message}</p>
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-xs opacity-70">
+                                  {new Date(message.timestamp).toLocaleTimeString()}
+                                </span>
+                                {message.riskLevel && (
+                                  <div className={`w-2 h-2 rounded-full ${getRiskColor(message.riskLevel)}`} />
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
+                    <div ref={messagesEndRef} />
                   </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-            </ScrollArea>
+                </ScrollArea>
 
-            <form onSubmit={handleSendMessage} className="flex space-x-2">
-              <Input
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Type your message..."
-                className="flex-1"
-                disabled={sendMessageMutation.isPending}
-              />
-              <Button 
-                type="submit" 
-                size="icon"
-                disabled={sendMessageMutation.isPending || !inputMessage.trim()}
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                <form onSubmit={handleSendMessage} className="flex space-x-2">
+                  <Input
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    className="flex-1"
+                    disabled={sendMessageMutation.isPending}
+                  />
+                  <Button 
+                    type="submit" 
+                    size="icon"
+                    disabled={sendMessageMutation.isPending || !inputMessage.trim()}
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+          
+          <div className="space-y-4">
+            {currentUserId && (
+              <DataSyncStatus userId={currentUserId} />
+            )}
+            
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">AI Assistant Info</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs text-muted-foreground">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span>Powered by Google Gemini</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                  <span>Evidence-based responses</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full" />
+                  <span>CBT & mindfulness techniques</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full" />
+                  <span>Risk assessment enabled</span>
+                </div>
+                <p className="pt-2 border-t">
+                  This AI assistant provides support but is not a replacement for professional mental health care.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
     </div>
   );

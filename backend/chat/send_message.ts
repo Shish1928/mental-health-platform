@@ -2,7 +2,7 @@ import { api } from "encore.dev/api";
 import { chatDB } from "./db";
 import { secret } from "encore.dev/config";
 
-const openAIKey = secret("OpenAIKey");
+const geminiAPIKey = secret("GeminiAPIKey");
 
 export interface SendMessageRequest {
   sessionId: string;
@@ -117,44 +117,81 @@ async function generateAIResponse(message: string, language: string, sessionId: 
 
     const conversation = messages.map(m => `${m.sender}: ${m.message}`).join('\n');
     
-    const prompt = `You are a compassionate AI mental health support assistant. You provide empathetic, supportive responses using cognitive behavioral therapy (CBT) principles. Be warm, understanding, and encouraging. Ask open-ended questions to help the user explore their feelings. Always remind users that you're not a replacement for professional help.
+    const prompt = `You are a compassionate AI mental health support assistant specialized in helping students. You provide empathetic, supportive responses using evidence-based therapeutic techniques like CBT and mindfulness. Be warm, understanding, and encouraging. Ask open-ended questions to help users explore their feelings. Always remind users that you're not a replacement for professional help when appropriate.
+
+Key guidelines:
+- Be empathetic and non-judgmental
+- Use active listening techniques
+- Offer practical coping strategies
+- Validate the user's feelings
+- Encourage professional help when needed
+- Keep responses conversational and supportive (2-4 sentences)
 
 Language: ${language}
-Conversation history:
+Previous conversation:
 ${conversation}
 
-User: ${message}
+Current user message: ${message}
 
-Respond with empathy and support:`;
+Provide a supportive, therapeutic response:`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiAPIKey()}`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${openAIKey()}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 250,
+        },
+        safetySettings: [
           {
-            role: "system",
-            content: prompt,
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
           },
           {
-            role: "user",
-            content: message,
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
           },
-        ],
-        max_tokens: 200,
-        temperature: 0.7,
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          }
+        ]
       }),
     });
 
     const data = await response.json();
-    return data.choices?.[0]?.message?.content || "I'm here to listen. Can you tell me more about how you're feeling?";
+    
+    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+      return data.candidates[0].content.parts[0].text;
+    } else {
+      throw new Error("Invalid response from Gemini API");
+    }
   } catch (error) {
     console.error("Error generating AI response:", error);
-    return "I'm here to support you. Sometimes I have technical difficulties, but I'm listening. How can I help you today?";
+    
+    // Fallback responses based on sentiment and risk level
+    const fallbackResponses = {
+      high: "I can hear that you're going through a really difficult time right now. Your feelings are valid, and I want you to know that you're not alone. Have you considered reaching out to a counselor or trusted friend for additional support?",
+      medium: "It sounds like you're dealing with some challenging feelings. Thank you for sharing this with me - that takes courage. What do you think might help you feel a little more supported right now?",
+      low: "I appreciate you sharing your thoughts with me. It's important to check in with ourselves regularly. What's one small thing that usually helps you feel a bit better when you're going through tough times?"
+    };
+    
+    const riskLevel = calculateRiskLevel(await analyzeSentiment(message), message);
+    return fallbackResponses[riskLevel];
   }
 }
 
