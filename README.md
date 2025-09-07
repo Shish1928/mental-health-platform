@@ -4,7 +4,7 @@
 > 🚀 A blockchain + AI-powered platform providing multilingual voice/chat support, relaxation resources, anonymous counseling, appointment booking, progress tracking, and gamified wellness for students in higher education.
 
 ---
-
+Project Link: https://staging-mental-health-platform-5sqi.frontend.encr.app
 ## 📌 Problem Statement
 
 Mental health challenges among students are rising due to stress, isolation, and lack of accessible counseling. Current solutions lack:
